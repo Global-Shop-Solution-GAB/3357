@@ -1,0 +1,109 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+V.Local.sPart.Declare(String)
+V.Local.fResult.Declare(Float)
+V.Local.sQuery.Declare(String)
+V.Local.flbs.Declare(Float)
+V.Local.ic.Declare(Long)
+V.Local.ir.Declare(Long)
+V.Local.sRow.Declare(String)
+V.Local.scols.Declare(String)
+V.Local.bRet.Declare(Boolean)
+V.Local.sfile.Declare(String)
+
+F.Intrinsic.String.Concat(V.System.Temp,"\SCP-DONE",V.Caller.CompanyCode,V.Caller.Terminal,".txt",V.Local.sfile)
+F.Intrinsic.File.Exists(V.Local.sfile,V.Local.bRet)
+
+F.odbc.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+F.Intrinsic.Control.If(V.Caller.Hook,=,28406)
+	V.Local.sQuery.Set("select PART from JOB_HEADER WHERE JOB = '[JOB]' AND suffix = '[SUFFIX]'")
+	F.Intrinsic.String.Replace(V.Local.sQuery,"[JOB]",V.passed.009990,V.Local.sQuery)
+	F.Intrinsic.String.Replace(V.Local.sQuery,"[SUFFIX]",V.passed.009991,V.Local.sQuery)
+	F.ODBC.Connection!conx.OpenRecordsetRO("rst",V.Local.sQuery)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+		V.Local.sPart.Set(V.ODBC.conx!rst.FieldValTrim!Part)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.UI.Msgbox("Job not found. Unable to locate part")
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.endif
+	F.ODBC.conx!rst.close
+	F.Intrinsic.Control.if(V.Local.bRet,=,True)
+		F.Intrinsic.File.DeleteFile(V.Local.sfile)
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Else
+	'proecess already don't want to convert again
+	F.Intrinsic.Control.if(V.Local.bRet,=,True)
+		F.Intrinsic.File.DeleteFile(V.Local.sfile)
+		F.ODBC.Connection!conx.close
+		F.Intrinsic.Control.end
+	F.Intrinsic.Control.endif
+	V.Local.sPart.Set(V.Passed.009002)
+
+F.Intrinsic.Control.EndIf
+
+V.Local.sQuery.Set("select LBS from INVENTORY_MST2 WHERE PART = '[PART]'")
+F.Intrinsic.String.Replace(V.Local.sQuery,"[PART]",V.local.spart,V.Local.sQuery)
+F.ODBC.Connection!conx.OpenRecordsetRO("rst",V.Local.sQuery)
+F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.FieldValFloat!LBS,<>,0)
+		V.Local.flbs.Set(V.ODBC.conx!rst.FieldValFloat!LBS)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.endif
+F.ODBC.conx!rst.close
+F.ODBC.Connection!conx.Close
+V.Local.sPart.Set(V.passed.SCRAP-CODE)
+
+
+F.Intrinsic.Control.if(V.Caller.Hook,=,28406)
+	F.Intrinsic.Control.If(V.local.fLBS,<>,0)
+		F.Intrinsic.Debug.Stop
+
+		F.Intrinsic.BDF.Load("SCRAP-DATA-FILE","AUX001")
+		F.Intrinsic.BDF.Clone("SCRAP-DATA-FILE","CLONE")
+		F.Intrinsic.BDF.ReadRowCount("SCRAP-DATA-FILE",V.Local.ir)
+		F.Intrinsic.Math.Sub(V.Local.ir,1,V.Local.ir)
+		F.Intrinsic.Control.For(V.Local.ic,0,V.Local.ir,1)
+			F.Intrinsic.BDF.ReadRow("SCRAP-DATA-FILE",V.Local.ic,V.Local.sRow)
+			F.Intrinsic.String.Split(V.Local.sRow,"|~|",V.Local.scols)
+			
+			F.Intrinsic.Control.If(V.Local.scols.UBound,>=,2)
+				F.Intrinsic.Control.If(V.Local.scols(2).IsNumeric,=,True)
+					F.Intrinsic.Math.Div(V.local.scols(2),V.local.flbs,V.Local.fResult)
+					F.Intrinsic.Debug.stop
+					F.Intrinsic.String.Format(V.Local.fResult,"0.0000",V.Local.scols(2))
+					F.Intrinsic.String.join(V.Local.scols,"|~|",V.Local.sRow)
+					F.Intrinsic.BDF.WriteRow("CLONE",V.Local.sRow)
+				F.Intrinsic.Control.endif
+			F.Intrinsic.Control.endif
+		F.Intrinsic.Control.Next(V.Local.ic)
+		F.Intrinsic.BDF.Save("CLONE","AUX001")
+		'drop flag file so conversion doesn't happen again
+		F.Intrinsic.File.String2File(V.Local.sfile,"")
+	F.Intrinsic.Control.endif
+F.Intrinsic.Control.else
+	F.Intrinsic.Control.If(V.local.flbs,<>,0)
+		F.Intrinsic.Math.Div(V.Passed.000002,V.local.flbs,V.Local.fResult)
+		F.Intrinsic.Debug.stop
+		F.Intrinsic.String.Format(V.Local.fResult,"0.0000",V.Local.fResult)
+		V.Passed.000002.Set(V.Local.fResult)
+	F.Intrinsic.Control.endif
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.End
+
+
+Program.Sub.Main.End
+
+Program.Sub.Comments.Start
+${$0$}$ATG_SCRAPCONVERT-3833$}$JND$}$8/9/2012
+${$1$}$$}$$}$1$}$28410$}$$}$10/29/2012 8:47:21 PM$}$Quote 4153
+
+${$1$}$$}$$}$0$}$15880$}$$}$8/9/2012 6:32:28 PM$}$Quote 3833
+Program.Sub.Comments.End
+
